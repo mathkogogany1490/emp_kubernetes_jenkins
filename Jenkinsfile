@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_REPO = "mathkogogany1490"   // 🔥 실제 DockerHub ID
+        DOCKERHUB_REPO = "kogo3039"   // 🔥 실제 DockerHub ID
         DOCKER_CREDENTIALS = "dockerhub-creds"
         KUBE_NAMESPACE = "my-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
