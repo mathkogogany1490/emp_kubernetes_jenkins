@@ -2,20 +2,28 @@ kubectl get nodes
 docker -v
 sudo usermod -aG docker jenkins
 
+docker build -t my-jenkins .
+
 docker run -d \
   --name jenkins \
-  --restart=always \
   -p 8080:8080 \
   -p 50000:50000 \
   -v jenkins_home:/var/jenkins_home \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  jenkins/jenkins:lts
-
-
-
+  --network host \
+  my-jenkins
 
 
 docker exec -it --user root jenkins bash
+
+curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
+install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+
+
+
+
+
 
 apt update
 
