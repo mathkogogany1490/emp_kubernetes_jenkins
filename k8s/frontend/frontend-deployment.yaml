@@ -16,7 +16,29 @@ spec:
       containers:
         - name: frontend
           image: frontend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never   # 🔥 로컬 k8s
+
           ports:
             - containerPort: 3000
-          # 필요하다면 환경변수 추가
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10

@@ -1,6 +1,5 @@
-docker ps
+kubectl get nodes
 
-docker build -t my-jenkins .
 
 docker run -d \
   --name jenkins \

@@ -2,123 +2,94 @@ pipeline {
     agent any
 
     environment {
-        NAMESPACE = "my-app"
+        DOCKERHUB_REPO = "yourdockerhubid"
+        DOCKER_CREDENTIALS = "dockerhub-creds"
+        KUBE_NAMESPACE = "my-app"
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
 
-        // ==============================
-        // 1. FULL RESET
-        // ==============================
-        stage('Clean Kubernetes (Full Reset)') {
+        stage('Checkout') {
             steps {
-                sh '''
-                echo "=== Delete Existing Namespace ==="
-                kubectl delete namespace ${NAMESPACE} --ignore-not-found=true
-                sleep 8
-                '''
+                checkout scm
             }
         }
 
-        stage('Recreate Namespace') {
+        stage('Build Backend Image') {
             steps {
-                sh '''
-                echo "=== Create Namespace ==="
-                kubectl create namespace ${NAMESPACE}
-                '''
+                script {
+                    docker.build("${DOCKERHUB_REPO}/backend:${IMAGE_TAG}", "./backend")
+                    docker.build("${DOCKERHUB_REPO}/backend:latest", "./backend")
+                }
             }
         }
 
-        // ==============================
-        // 2. CREATE SECRET (No YAML file)
-        // ==============================
-        stage('Create Secret from Jenkins') {
+        stage('Build Frontend Image') {
             steps {
-                sh '''
-                echo "=== Create .env File ==="
-
-                cat <<EOF > .env
-POSTGRES_DB=mydb
-POSTGRES_USER=kogo
-POSTGRES_PASSWORD=math1106
-DBNAME=mydb
-DBUSER=kogo
-DBPASSWORD=math1106
-DBHOST=db
-DBPORT=5432
-DJANGO_SECRET_KEY=django-secret
-DJANGO_DEBUG=False
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
-CORS_ALLOWED_ORIGINS=http://localhost
-NEXT_PUBLIC_API_BASE_URL=/api
-EOF
-
-                echo "=== Create Kubernetes Secret ==="
-                kubectl create secret generic postgres-secret \
-                    --from-env-file=.env \
-                    -n ${NAMESPACE}
-                '''
+                script {
+                    docker.build(
+                        "${DOCKERHUB_REPO}/frontend:${IMAGE_TAG}",
+                        "--build-arg NEXT_PUBLIC_API_BASE_URL=/api ./frontend"
+                    )
+                    docker.build(
+                        "${DOCKERHUB_REPO}/frontend:latest",
+                        "--build-arg NEXT_PUBLIC_API_BASE_URL=/api ./frontend"
+                    )
+                }
             }
         }
 
-        // ==============================
-        // 3. BUILD IMAGES
-        // ==============================
-        stage('Build Docker Images') {
+        stage('Build Nginx Image') {
             steps {
-                sh '''
-                echo "=== Build Backend ==="
-                docker build --no-cache -t backend:latest ./backend
-
-                echo "=== Build Frontend ==="
-                docker build --no-cache -t frontend:latest ./frontend
-
-                echo "=== Build Nginx ==="
-                docker build --no-cache -t nginx-local:latest ./nginx
-                '''
+                script {
+                    docker.build("${DOCKERHUB_REPO}/nginx:${IMAGE_TAG}", "./nginx")
+                    docker.build("${DOCKERHUB_REPO}/nginx:latest", "./nginx")
+                }
             }
         }
 
-        // ==============================
-        // 4. DEPLOY
-        // ==============================
-        stage('Deploy Fresh to Kubernetes') {
+        stage('Push Images') {
             steps {
-                sh '''
-                echo "=== Apply Kubernetes Manifests ==="
-                kubectl apply -R -f k8s/
-                '''
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS) {
+
+                        docker.image("${DOCKERHUB_REPO}/backend:${IMAGE_TAG}").push()
+                        docker.image("${DOCKERHUB_REPO}/backend:latest").push()
+
+                        docker.image("${DOCKERHUB_REPO}/frontend:${IMAGE_TAG}").push()
+                        docker.image("${DOCKERHUB_REPO}/frontend:latest").push()
+
+                        docker.image("${DOCKERHUB_REPO}/nginx:${IMAGE_TAG}").push()
+                        docker.image("${DOCKERHUB_REPO}/nginx:latest").push()
+                    }
+                }
             }
         }
 
-        // ==============================
-        // 5. WAIT FOR READY
-        // ==============================
-        stage('Wait for Rollout') {
+        stage('Deploy to Kubernetes') {
             steps {
-                sh '''
-                echo "=== Waiting for Deployments ==="
+                sh """
+                kubectl apply -f k8s/
 
-                kubectl rollout status deployment/backend -n ${NAMESPACE}
-                kubectl rollout status deployment/frontend -n ${NAMESPACE}
-                kubectl rollout status deployment/nginx -n ${NAMESPACE}
-                '''
+                kubectl set image deployment/backend backend=${DOCKERHUB_REPO}/backend:${IMAGE_TAG} -n ${KUBE_NAMESPACE}
+                kubectl set image deployment/frontend frontend=${DOCKERHUB_REPO}/frontend:${IMAGE_TAG} -n ${KUBE_NAMESPACE}
+                kubectl set image deployment/nginx nginx=${DOCKERHUB_REPO}/nginx:${IMAGE_TAG} -n ${KUBE_NAMESPACE}
+
+                kubectl rollout status deployment/backend -n ${KUBE_NAMESPACE}
+                kubectl rollout status deployment/frontend -n ${KUBE_NAMESPACE}
+                kubectl rollout status deployment/nginx -n ${KUBE_NAMESPACE}
+                """
             }
         }
+    }
 
-        // ==============================
-        // 6. VERIFY
-        // ==============================
-        stage('Verify Deployment') {
-            steps {
-                sh '''
-                echo "=== Pods Status ==="
-                kubectl get pods -n ${NAMESPACE}
-
-                echo "=== Services ==="
-                kubectl get svc -n ${NAMESPACE}
-                '''
-            }
+    post {
+        success {
+            echo "Deployment Success 🚀 Build: ${IMAGE_TAG}"
+        }
+        failure {
+            echo "Deployment Failed ❌"
         }
     }
 }
