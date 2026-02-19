@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_REPO = "yourdockerhubid"
+        DOCKERHUB_REPO = "mathkogogany1490"   // 🔥 실제 DockerHub ID
         DOCKER_CREDENTIALS = "dockerhub-creds"
         KUBE_NAMESPACE = "my-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
@@ -52,7 +52,7 @@ pipeline {
         stage('Push Images') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS) {
+                    docker.withRegistry('', DOCKER_CREDENTIALS) {  // 🔥 URL 제거
 
                         docker.image("${DOCKERHUB_REPO}/backend:${IMAGE_TAG}").push()
                         docker.image("${DOCKERHUB_REPO}/backend:latest").push()
