@@ -1,13 +1,26 @@
 pipeline {
     agent any
 
+    environment {
+        NAMESPACE = "my-app"
+    }
+
     stages {
+
+        stage('Apply Namespace & Secret') {
+            steps {
+                sh 'kubectl apply -f k8s/namespace.yaml'
+                sh 'kubectl apply -f k8s/postgres-secret.yaml'
+            }
+        }
 
         stage('Build Images') {
             steps {
-                sh 'docker build -t backend:latest ./backend'
-                sh 'docker build -t frontend:latest ./frontend'
-                sh 'docker build -t nginx-local:latest ./nginx'
+                sh '''
+                docker build -t backend:latest ./backend
+                docker build -t frontend:latest ./frontend
+                docker build -t nginx-local:latest ./nginx
+                '''
             }
         }
 
@@ -17,18 +30,37 @@ pipeline {
             }
         }
 
-        stage('Restart Deployments') {
+        stage('Rollout Restart') {
             steps {
-                sh 'kubectl rollout restart deployment backend -n my-app'
-                sh 'kubectl rollout restart deployment frontend -n my-app'
-                sh 'kubectl rollout restart deployment nginx -n my-app'
+                sh '''
+                kubectl rollout restart deployment backend -n ${NAMESPACE}
+                kubectl rollout restart deployment frontend -n ${NAMESPACE}
+                kubectl rollout restart deployment nginx -n ${NAMESPACE}
+                '''
+            }
+        }
+
+        stage('Wait for Rollout') {
+            steps {
+                sh '''
+                kubectl rollout status deployment/backend -n ${NAMESPACE}
+                kubectl rollout status deployment/frontend -n ${NAMESPACE}
+                kubectl rollout status deployment/nginx -n ${NAMESPACE}
+                '''
             }
         }
 
         stage('Check Pods') {
             steps {
-                sh 'kubectl get pods -n my-app'
+                sh 'kubectl get pods -n ${NAMESPACE}'
             }
+        }
+    }
+
+    post {
+        failure {
+            sh 'kubectl get pods -n ${NAMESPACE}'
+            sh 'kubectl describe pods -n ${NAMESPACE}'
         }
     }
 }
