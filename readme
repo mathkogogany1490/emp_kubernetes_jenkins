@@ -1,16 +1,21 @@
 kubectl get nodes
-
+docker -v
+sudo usermod -aG docker jenkins
 
 docker run -d \
   --name jenkins \
-  -u root \
+  --restart=always \
   -p 8080:8080 \
   -p 50000:50000 \
   -v jenkins_home:/var/jenkins_home \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  my-jenkins
+  jenkins/jenkins:lts
 
-docker exec -it jenkins bash
+
+
+
+
+docker exec -it --user root jenkins bash
 
 apt update
 
@@ -18,6 +23,10 @@ apt install -y docker.io
 
 curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
 install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+kubectl version --client
+cat ~/.kube/config
+
 
 docker exec -it jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
