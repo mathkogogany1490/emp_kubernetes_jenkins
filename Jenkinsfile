@@ -7,13 +7,6 @@ pipeline {
 
     stages {
 
-        stage('Apply Namespace & Secret') {
-            steps {
-                sh 'kubectl apply -f k8s/namespace.yaml'
-                sh 'kubectl apply -f k8s/postgres-secret.yaml'
-            }
-        }
-
         stage('Build Images') {
             steps {
                 sh '''
@@ -54,13 +47,6 @@ pipeline {
             steps {
                 sh 'kubectl get pods -n ${NAMESPACE}'
             }
-        }
-    }
-
-    post {
-        failure {
-            sh 'kubectl get pods -n ${NAMESPACE}'
-            sh 'kubectl describe pods -n ${NAMESPACE}'
         }
     }
 }
